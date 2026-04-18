@@ -65,7 +65,7 @@ class MemoryUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 # =========================
-# AUTH
+# AUTH HELPERS
 # =========================
 def get_user(request: Request):
     auth = request.headers.get("Authorization", "")
@@ -83,9 +83,53 @@ def get_user(request: Request):
     return user.user
 
 # =========================
-# MEMORY HELPERS (SAFE)
+# AUTH ROUTES (FIXED - WAS MISSING)
 # =========================
-def get_memories(user_id):
+@api.post("/auth/login")
+def login(data: dict):
+    supabase = get_supabase()
+
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
+        raise HTTPException(400, "Missing email or password")
+
+    res = supabase.auth.sign_in_with_password({
+        "email": email,
+        "password": password
+    })
+
+    return {
+        "access_token": res.session.access_token,
+        "user": res.user
+    }
+
+
+@api.post("/auth/register")
+def register(data: dict):
+    supabase = get_supabase()
+
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
+        raise HTTPException(400, "Missing email or password")
+
+    res = supabase.auth.sign_up({
+        "email": email,
+        "password": password
+    })
+
+    return {
+        "message": "User created",
+        "user": res.user
+    }
+
+# =========================
+# MEMORY HELPERS
+# =========================
+def get_active_memories(user_id):
     supabase = get_supabase()
     return supabase.table("core_memories") \
         .select("*") \
@@ -121,6 +165,7 @@ def create_project(data: dict, request: Request):
 
     return supabase.table("projects").insert(project).execute().data
 
+
 @api.get("/projects")
 def get_projects(request: Request):
     user = get_user(request)
@@ -130,6 +175,7 @@ def get_projects(request: Request):
         .select("*") \
         .eq("user_id", user.id) \
         .execute().data
+
 
 @api.get("/projects/{project_id}")
 def get_project(project_id: str, request: Request):
@@ -145,7 +191,7 @@ def get_project(project_id: str, request: Request):
     return res.data[0] if res.data else {}
 
 # =========================
-# FILES (FIXED TO MATCH FRONTEND + SCHEMA)
+# FILES
 # =========================
 @api.post("/projects/{project_id}/files")
 async def upload_file(project_id: str, file: UploadFile = File(...), request: Request = None):
@@ -168,6 +214,7 @@ async def upload_file(project_id: str, file: UploadFile = File(...), request: Re
 
     return supabase.table("project_files").insert(data).execute().data
 
+
 @api.get("/projects/{project_id}/files")
 def get_files(project_id: str, request: Request):
     user = get_user(request)
@@ -179,7 +226,7 @@ def get_files(project_id: str, request: Request):
         .eq("user_id", user.id) \
         .execute().data
 
-# 🔥 FIXED MISSING DELETE ENDPOINT
+
 @api.delete("/projects/{project_id}/files/{file_id}")
 def delete_file(project_id: str, file_id: str, request: Request):
     user = get_user(request)
@@ -194,7 +241,7 @@ def delete_file(project_id: str, file_id: str, request: Request):
     return {"success": True}
 
 # =========================
-# CHAT STREAM (SAFE VERSION)
+# CHAT STREAM
 # =========================
 SYSTEM_PROMPT = "You are CodeBrain, an elite AI coding assistant."
 
@@ -210,7 +257,7 @@ async def chat_stream(project_id: str, data: ChatRequest, request: Request):
         .eq("project_name", project_id) \
         .execute().data
 
-    memories = get_memories(user.id)
+    memories = get_active_memories(user.id)
     brain = get_brain(user.id)
 
     context = f"""
@@ -245,7 +292,7 @@ FILES:
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 # =========================
-# MEMORIES (UNCHANGED BUT SAFE)
+# MEMORIES
 # =========================
 @api.get("/core-memories")
 def get_memories_route(request: Request):
@@ -256,6 +303,7 @@ def get_memories_route(request: Request):
         .select("*") \
         .eq("user_id", user.id) \
         .execute().data
+
 
 @api.post("/core-memories")
 def create_memory(data: MemoryCreate, request: Request):
@@ -274,6 +322,7 @@ def create_memory(data: MemoryCreate, request: Request):
 
     return supabase.table("core_memories").insert(memory).execute().data[0]
 
+
 @api.put("/core-memories/{memory_id}")
 def update_memory(memory_id: str, data: MemoryUpdate, request: Request):
     user = get_user(request)
@@ -286,6 +335,7 @@ def update_memory(memory_id: str, data: MemoryUpdate, request: Request):
         .eq("id", memory_id) \
         .eq("user_id", user.id) \
         .execute().data
+
 
 @api.delete("/core-memories/{memory_id}")
 def delete_memory(memory_id: str, request: Request):
