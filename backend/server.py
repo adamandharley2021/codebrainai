@@ -1,6 +1,11 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+from agent.context_builder import build_context
+from agent.prompt import SYSTEM_PROMPT
+from agent.executor import execute_agent_actions
+from agent.schemas import AgentResponse
+
 from fastapi import FastAPI, APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -334,7 +339,7 @@ def delete_memory(memory_id: str, request: Request):
 
 
 # =========================
-# CHAT STREAM (UNCHANGED)
+# CHAT STREAM (AGENT MODE)
 # =========================
 @api.post("/projects/{project_id}/chat/stream")
 async def chat_stream(project_id: str, data: ChatRequest, request: Request):
@@ -342,14 +347,29 @@ async def chat_stream(project_id: str, data: ChatRequest, request: Request):
     supabase = get_supabase()
     client = get_openai()
 
-    files = supabase.table("project_files").select("*").eq("project_name", project_id).execute().data or []
+    files = supabase.table("project_files") \
+        .select("*") \
+        .eq("project_name", project_id) \
+        .eq("user_id", user.id) \
+        .execute().data or []
 
-    system_prompt = f"""
-You are CodeBrain AI.
+    memories = supabase.table("core_memories") \
+        .select("*") \
+        .eq("user_id", user.id) \
+        .eq("is_active", True) \
+        .execute().data or []
 
-PROJECT FILES:
-{chr(10).join([f"{f.get('filename','')}\n{f.get('content','')[:1000]}" for f in files])}
-"""
+    project = supabase.table("projects") \
+        .select("*") \
+        .eq("id", project_id) \
+        .eq("user_id", user.id) \
+        .single() \
+        .execute().data
+
+    print(f"[DEBUG] files: {len(files)}, memories: {len(memories)}")
+
+    context = build_context(project, files, memories)
+    system_prompt = SYSTEM_PROMPT + "\n\nCODEBASE CONTEXT:\n" + context
 
     async def stream():
         response = await client.chat.completions.create(
@@ -363,12 +383,37 @@ PROJECT FILES:
 
         full = ""
 
+        # =========================
+        # STREAM TOKENS
+        # =========================
         async for chunk in response:
             if chunk.choices[0].delta.content:
                 token = chunk.choices[0].delta.content
                 full += token
                 yield f"data: {json.dumps({'content': token})}\n\n"
 
+        # =========================
+        # POST-PROCESS (AGENT EXECUTION)
+        # =========================
+        try:
+            parsed = json.loads(full)
+        except:
+            parsed = None
+
+        if parsed and parsed.get("type") == "agent_actions":
+
+            validated = AgentResponse(**parsed)
+
+            result = execute_agent_actions(
+                validated.actions,
+                supabase,
+                user.id,
+                project_id
+            )
+
+            yield f"data: {json.dumps({'agent_results': result})}\n\n"
+
+        # DONE SIGNAL
         yield f"data: {json.dumps({'done': True})}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
@@ -380,5 +425,6 @@ PROJECT FILES:
 @api.get("/")
 def root():
     return {"status": "CodeBrain AI running"}
+
 
 app.include_router(api)
