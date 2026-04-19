@@ -158,12 +158,19 @@ const MemoriesPage = () => {
     }
   };
 
-  const filteredMemories = memories.filter(m => {
-    const matchesSearch = m.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         m.content.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || m.category === filterCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredMemories = memories.filter((m) => {
+  const title = (m?.title || "").toLowerCase();
+  const content = (m?.content || "").toLowerCase();
+
+  const matchesSearch =
+    title.includes(searchTerm.toLowerCase()) ||
+    content.includes(searchTerm.toLowerCase());
+
+  const matchesCategory =
+    filterCategory === "all" || m?.category === filterCategory;
+
+  return matchesSearch && matchesCategory;
+});
 
   const getCategoryIcon = (cat) => {
     const found = CATEGORIES.find(c => c.value === cat);

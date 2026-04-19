@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; 
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -286,17 +286,28 @@ const ProjectChatPage = () => {
     );
   };
 
-  const getFileLanguage = (filename) => {
-    const ext = filename.split('.').pop().toLowerCase();
-    const langMap = {
-      js: 'javascript', jsx: 'jsx', ts: 'typescript', tsx: 'tsx',
-      py: 'python', rb: 'ruby', go: 'go', rs: 'rust',
-      java: 'java', cpp: 'cpp', c: 'c', cs: 'csharp',
-      html: 'html', css: 'css', scss: 'scss', json: 'json',
-      md: 'markdown', yaml: 'yaml', yml: 'yaml', sql: 'sql'
-    };
-    return langMap[ext] || 'text';
+  const getFileLanguage = (file) => {
+  const path = file?.file_path || file?.filename || "";
+
+  if (!path || typeof path !== "string") return "text";
+
+  const parts = path.split(".");
+  const ext = parts.length > 1 ? parts.pop().toLowerCase() : "";
+
+  const map = {
+    js: "javascript",
+    jsx: "javascript",
+    ts: "typescript",
+    tsx: "typescript",
+    py: "python",
+    json: "json",
+    html: "html",
+    css: "css",
+    md: "markdown",
   };
+
+  return map[ext] || "text";
+};
 
   if (loading) {
     return (
@@ -307,7 +318,7 @@ const ProjectChatPage = () => {
   }
 
   return (
-    <div className="h-screen bg-[#050505] flex flex-col">
+    <div className="min-h-screen bg-[#050505] flex flex-col">
       {/* Header */}
       <header className="border-b border-white/10 bg-[#030303] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -334,7 +345,7 @@ const ProjectChatPage = () => {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex">
         {/* Files Sidebar */}
         <aside className={`${showFiles ? 'w-64' : 'w-0'} border-r border-white/10 bg-[#030303] flex flex-col transition-all overflow-hidden`}>
           <div className="p-3 border-b border-white/10 flex items-center justify-between">

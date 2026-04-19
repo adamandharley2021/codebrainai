@@ -3,7 +3,10 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+// FIX: safe fallback for Vercel
+const API_URL =
+  process.env.REACT_APP_BACKEND_URL ||
+  "https://codebrainai.onrender.com";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -13,11 +16,13 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       const storedToken = localStorage.getItem('token');
+
       if (storedToken) {
         try {
           const response = await axios.get(`${API_URL}/api/auth/me`, {
             headers: { Authorization: `Bearer ${storedToken}` }
           });
+
           setUser(response.data);
           setToken(storedToken);
         } catch (error) {
@@ -26,28 +31,47 @@ export const AuthProvider = ({ children }) => {
           setUser(null);
         }
       }
+
       setLoading(false);
     };
+
     checkAuth();
   }, []);
 
   const login = async (email, password) => {
-    const response = await axios.post(`${API_URL}/api/auth/login`, { email, password });
-    const { user: userData, session } = response.data;
-    localStorage.setItem('token', session.access_token);
-    setToken(session.access_token);
+    const response = await axios.post(
+      `${API_URL}/api/auth/login`,
+      { email, password }
+    );
+
+    // FIX: match backend response (NO session)
+    const { user: userData, access_token } = response.data;
+
+    if (!access_token) {
+      throw new Error("No access token returned from backend");
+    }
+
+    localStorage.setItem('token', access_token);
+    setToken(access_token);
     setUser(userData);
+
     return userData;
   };
 
   const register = async (email, password, name) => {
-    const response = await axios.post(`${API_URL}/api/auth/register`, { email, password, name });
-    const { user: userData, session } = response.data;
-    if (session?.access_token) {
-      localStorage.setItem('token', session.access_token);
-      setToken(session.access_token);
+    const response = await axios.post(
+      `${API_URL}/api/auth/register`,
+      { email, password, name }
+    );
+
+    const { user: userData, access_token } = response.data;
+
+    if (access_token) {
+      localStorage.setItem('token', access_token);
+      setToken(access_token);
       setUser(userData);
     }
+
     return response.data;
   };
 
@@ -64,10 +88,14 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
-    isAuthenticated: !!user
+    isAuthenticated: !!token
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
