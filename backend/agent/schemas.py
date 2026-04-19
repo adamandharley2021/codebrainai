@@ -60,10 +60,11 @@ class AgentResponse(BaseModel):
         description="Short explanation of why these changes are being made"
     )
 
+
 # =============================
-# 🔒 SAFETY HELPERS (PUT HERE)
+# SAFETY HELPERS
 # =============================
 
-    def validate_no_path_traversal(path: str):
-        if ".." in path or path.startswith("/"):
-            raise ValueError(f"Invalid unsafe path: {path}")
+def validate_no_path_traversal(path: str):
+    if ".." in path or path.startswith("/"):
+        raise ValueError(f"Invalid unsafe path: {path}")
